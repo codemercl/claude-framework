@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Agent Orchestration</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --border: #1e1e2a;
+    --text: #e4e4ed;
+    --muted: #6b6b80;
+    --accent: #7c6aef;
+    --accent2: #4ecdc4;
+    --opus: #e07c4a;
+    --sonnet: #5b9bd5;
+    --haiku: #7bc47f;
+    --red: #e05a5a;
+    --yellow: #e0c55a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  .deck {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 80px;
+    opacity: 0;
+    transform: translateX(40px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    pointer-events: none;
+    overflow-y: auto;
+  }
+
+  .slide.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: all;
+  }
+
+  .slide.prev {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+
+  /* Progress bar */
+  .progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.4s ease;
+    z-index: 100;
+  }
+
+  /* Navigation */
+  .nav {
+    position: fixed;
+    bottom: 30px;
+    right: 40px;
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+  }
+
+  .nav button {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+  }
+
+  .nav button:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
+  .slide-counter {
+    position: fixed;
+    bottom: 36px;
+    left: 40px;
+    font-size: 13px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    z-index: 100;
+  }
+
+  /* Typography */
+  h1 {
+    font-size: clamp(28px, 4vw, 52px);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  h2 {
+    font-size: clamp(22px, 3vw, 38px);
+    font-weight: 600;
+    margin-bottom: 32px;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .subtitle {
+    font-size: clamp(14px, 1.8vw, 20px);
+    color: var(--muted);
+    line-height: 1.6;
+    max-width: 700px;
+    text-align: center;
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 16px;
+  }
+
+  .tag.opus { background: rgba(224,124,74,0.15); color: var(--opus); }
+  .tag.sonnet { background: rgba(91,155,213,0.15); color: var(--sonnet); }
+  .tag.haiku { background: rgba(123,196,127,0.15); color: var(--haiku); }
+  .tag.accent { background: rgba(124,106,239,0.15); color: var(--accent); }
+
+  /* Problem cards */
+  .problems {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    max-width: 900px;
+    width: 100%;
+  }
+
+  .problem-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: border-color 0.3s;
+  }
+
+  .problem-card:hover {
+    border-color: var(--red);
+  }
+
+  .problem-card .icon {
+    font-size: 24px;
+    margin-bottom: 12px;
+  }
+
+  .problem-card h3 {
+    font-size: 15px;
+    margin-bottom: 8px;
+  }
+
+  .problem-card p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* Agent cards */
+  .agents-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    max-width: 1100px;
+    width: 100%;
+  }
+
+  .agent-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 16px;
+    text-align: center;
+    transition: all 0.3s;
+  }
+
+  .agent-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+  }
+
+  .agent-card .avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    margin: 0 auto 12px;
+  }
+
+  .agent-card .name {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+
+  .agent-card .role {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  .agent-card .model-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .model-badge.opus { background: rgba(224,124,74,0.15); color: var(--opus); }
+  .model-badge.sonnet { background: rgba(91,155,213,0.15); color: var(--sonnet); }
+  .model-badge.haiku { background: rgba(123,196,127,0.15); color: var(--haiku); }
+
+  /* Pipeline */
+  .pipeline {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    max-width: 1100px;
+    width: 100%;
+    align-items: center;
+  }
+
+  .step-node {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    text-align: center;
+    min-width: 110px;
+    transition: all 0.3s;
+    cursor: default;
+    position: relative;
+  }
+
+  .step-node:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .step-node .step-num {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+
+  .step-node .step-name {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .step-node .step-model {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    display: inline-block;
+  }
+
+  .arrow {
+    color: var(--muted);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .arrow.down {
+    width: 100%;
+    text-align: center;
+    font-size: 14px;
+    margin: 4px 0;
+  }
+
+  .parallel-group {
+    display: flex;
+    gap: 8px;
+    background: rgba(124,106,239,0.05);
+    border: 1px dashed rgba(124,106,239,0.3);
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .parallel-label {
+    font-size: 10px;
+    color: var(--accent);
+    text-align: center;
+    margin-bottom: 4px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Layers */
+  .layers {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    max-width: 1000px;
+    width: 100%;
+  }
+
+  .layer-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .layer-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+  }
+
+  .layer-card:nth-child(1)::before { background: var(--accent); }
+  .layer-card:nth-child(2)::before { background: var(--opus); }
+  .layer-card:nth-child(3)::before { background: var(--sonnet); }
+  .layer-card:nth-child(4)::before { background: var(--haiku); }
+
+  .layer-card h3 { font-size: 14px; margin-bottom: 8px; }
+
+  .layer-card .path {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--accent2);
+    margin-bottom: 10px;
+  }
+
+  .layer-card p {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* Patterns */
+  .patterns-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    max-width: 1000px;
+    width: 100%;
+  }
+
+  .pattern-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .pattern-card h3 {
+    font-size: 14px;
+    margin-bottom: 8px;
+    color: var(--accent2);
+  }
+
+  .pattern-card p {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .pattern-card .visual {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    margin-top: 10px;
+    padding: 8px;
+    background: rgba(124,106,239,0.05);
+    border-radius: 6px;
+    line-height: 1.6;
+  }
+
+  /* File protocol */
+  .file-tree {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 32px;
+    max-width: 600px;
+  }
+
+  .file-tree .dir { color: var(--accent); }
+  .file-tree .file { color: var(--text); }
+  .file-tree .comment { color: var(--muted); font-style: italic; }
+  .file-tree .step-tag { color: var(--accent2); }
+
+  /* Comparison grid */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    max-width: 900px;
+    width: 100%;
+  }
+
+  .compare-col {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .compare-col h3 {
+    font-size: 15px;
+    margin-bottom: 16px;
+  }
+
+  .compare-col.yes h3 { color: var(--haiku); }
+  .compare-col.no h3 { color: var(--red); }
+
+  .compare-col ul {
+    list-style: none;
+    font-size: 13px;
+    line-height: 2;
+    color: var(--muted);
+  }
+
+  .compare-col ul li::before {
+    margin-right: 8px;
+    font-weight: 600;
+  }
+
+  .compare-col.yes ul li::before { content: '+'; color: var(--haiku); }
+  .compare-col.no ul li::before { content: '-'; color: var(--red); }
+
+  /* Cost table */
+  .cost-table {
+    border-collapse: collapse;
+    max-width: 800px;
+    width: 100%;
+  }
+
+  .cost-table th, .cost-table td {
+    padding: 12px 20px;
+    text-align: left;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cost-table th {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+
+  .cost-table td:nth-child(3) {
+    font-family: 'SF Mono', monospace;
+  }
+
+  /* Summary points */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    max-width: 1000px;
+    width: 100%;
+  }
+
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 20px;
+    text-align: center;
+  }
+
+  .summary-card .num {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .summary-card .label {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* Step detail */
+  .step-detail {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 32px;
+    max-width: 900px;
+    width: 100%;
+    align-items: start;
+  }
+
+  .step-detail .meta {
+    text-align: right;
+    padding-top: 4px;
+  }
+
+  .step-detail .meta .step-badge {
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .step-detail .meta .step-label {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  .step-detail .content h3 {
+    font-size: 22px;
+    margin-bottom: 16px;
+  }
+
+  .step-detail .content p {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 12px;
+  }
+
+  .step-detail .features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .feature-chip {
+    background: rgba(124,106,239,0.1);
+    border: 1px solid rgba(124,106,239,0.2);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .slide { padding: 40px 30px; }
+    .agents-grid { grid-template-columns: repeat(3, 1fr); }
+    .problems { grid-template-columns: 1fr; }
+    .layers { grid-template-columns: repeat(2, 1fr); }
+    .patterns-grid { grid-template-columns: 1fr; }
+    .compare-grid { grid-template-columns: 1fr; }
+    .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    .step-detail { grid-template-columns: 1fr; }
+    .step-detail .meta { text-align: left; }
+  }
+
+  @media (max-width: 600px) {
+    .agents-grid { grid-template-columns: repeat(2, 1fr); }
+    .pipeline { flex-direction: column; align-items: center; }
+    .arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<div class="deck" id="deck">
+
+  <!-- Slide 1: Title -->
+  <div class="slide active" data-slide="0">
+    <span class="tag accent">Claude Code</span>
+    <h1 style="text-align:center;max-width:900px;">Multi-Agent Orchestration</h1>
+    <p class="subtitle">
+      Разделение когнитивных ролей в LLM-пайплайнах<br>без внешней инфраструктуры
+    </p>
+    <p style="margin-top:40px;font-size:13px;color:var(--muted);">
+      Только Claude Code CLI + файлы + git
+    </p>
+  </div>
+
+  <!-- Slide 2: Problem -->
+  <div class="slide" data-slide="1">
+    <h2>Один LLM не может быть хорош во всём</h2>
+    <div class="problems">
+      <div class="problem-card">
+        <div class="icon">&#127919;</div>
+        <h3>Конфликт режимов мышления</h3>
+        <p>Планирование требует deep reasoning, а написание кода &mdash; механического исполнения. Совмещение в одном вызове приводит к тому, что модель &laquo;переключается&raquo; между ролями и теряет контекст решений.</p>
+      </div>
+      <div class="problem-card">
+        <div class="icon">&#128065;</div>
+        <h3>Ревью собственного кода</h3>
+        <p>Модель, написавшая код, не находит в нём ошибок &mdash; confirmation bias. Изолированный ревьюер без контекста реализации ловит проблемы, которые автор пропускает.</p>
+      </div>
+      <div class="problem-card">
+        <div class="icon">&#128176;</div>
+        <h3>Нет выбора модели под задачу</h3>
+        <p>Архитектурное решение требует Opus. Написание кода по готовому плану &mdash; Sonnet. Прогон линтера &mdash; Haiku. Один вызов = одна модель = переплата или недостаточное качество.</p>
+      </div>
+      <div class="problem-card">
+        <div class="icon">&#128163;</div>
+        <h3>Взрыв контекста</h3>
+        <p>Конвенции проекта + код 15 файлов + план + вопросы пользователя в одном промпте. Релевантная информация тонет в шуме, качество генерации падает.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 3: Solution -->
+  <div class="slide" data-slide="2">
+    <h2>Решение: когнитивное разделение труда</h2>
+    <div class="agents-grid">
+      <div class="agent-card">
+        <div class="avatar" style="background:rgba(91,155,213,0.15);">&#128269;</div>
+        <div class="name">Analyst</div>
+        <div class="role">Исследование кодовой базы, сбор контекста, вопросы</div>
+        <span class="model-badge sonnet">Sonnet</span>
+      </div>
+      <div class="agent-card">
+        <div class="avatar" style="background:rgba(224,124,74,0.15);">&#129504;</div>
+        <div class="name">Architect</div>
+        <div class="role">Планирование, trade-offs, архитектурные решения</div>
+        <span class="model-badge opus">Opus</span>
+      </div>
+      <div class="agent-card">
+        <div class="avatar" style="background:rgba(91,155,213,0.15);">&#9000;</div>
+        <div class="name">Developer</div>
+        <div class="role">Механическое исполнение плана, написание кода</div>
+        <span class="model-badge sonnet">Sonnet</span>
+      </div>
+      <div class="agent-card">
+        <div class="avatar" style="background:rgba(123,196,127,0.15);">&#9989;</div>
+        <div class="name">Validator</div>
+        <div class="role">Запуск линтеров, сбор ошибок, отчёт</div>
+        <span class="model-badge haiku">Haiku</span>
+      </div>
+      <div class="agent-card">
+        <div class="avatar" style="background:rgba(224,124,74,0.15);">&#128172;</div>
+        <div class="name">Consultant</div>
+        <div class="role">Ответы на точечные вопросы разработчика</div>
+        <span class="model-badge opus">Opus</span>
+      </div>
+    </div>
+    <p style="margin-top:24px;font-size:13px;color:var(--muted);">
+      Одна модель + разные identity + разные execution modes = разное поведение
+    </p>
+  </div>
+
+  <!-- Slide 4: Architecture layers -->
+  <div class="slide" data-slide="3">
+    <h2>4 слоя системы</h2>
+    <div class="layers">
+      <div class="layer-card">
+        <h3>Rules</h3>
+        <div class="path">.claude/rules/</div>
+        <p>Конвенции проекта. TypeScript, SCSS, GraphQL, Redux. Читают ВСЕ агенты. Отвечают на вопрос &laquo;КАК писать код&raquo;.</p>
+      </div>
+      <div class="layer-card">
+        <h3>Agents</h3>
+        <div class="path">.claude/agents/</div>
+        <p>Identity-файлы. &laquo;Кто ты, как себя ведёшь&raquo;. Analyst, Architect, Developer, Validator. Загружаются в начале каждого step.</p>
+      </div>
+      <div class="layer-card">
+        <h3>Skills</h3>
+        <div class="path">.claude/skills/</div>
+        <p>Переиспользуемые шаблоны кода. SCSS-модуль, useQuery хук, компонент. Читает только Developer по ссылке из плана.</p>
+      </div>
+      <div class="layer-card">
+        <h3>Steps</h3>
+        <div class="path">.claude/commands/dev-steps/</div>
+        <p>Инструкция для конкретного шага. Какой агент, какой mode, что читать, что писать на выход.</p>
+      </div>
+    </div>
+    <p style="margin-top:24px;font-size:13px;color:var(--muted);">
+      Skills vs Rules: Rules = ограничения (&laquo;как&raquo;), Skills = рецепты (&laquo;что именно написать&raquo;). Разные потребители, экономия контекста.
+    </p>
+  </div>
+
+  <!-- Slide 5: Pipeline overview -->
+  <div class="slide" data-slide="4">
+    <h2>Полный пайплайн</h2>
+    <div class="pipeline">
+      <div class="step-node">
+        <div class="step-num">Step 1</div>
+        <div class="step-name">Clarify</div>
+        <span class="step-model model-badge sonnet">Sonnet</span>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step-node">
+        <div class="step-num">Step 2</div>
+        <div class="step-name">Plan</div>
+        <span class="step-model model-badge opus">Opus</span>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step-node">
+        <div class="step-num">Step 2.5</div>
+        <div class="step-name">Preflight</div>
+        <span class="step-model model-badge sonnet">Sonnet</span>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step-node" style="border-color:rgba(224,124,74,0.3);">
+        <div class="step-num">Consult</div>
+        <div class="step-name" style="font-size:12px;">Conditional</div>
+        <span class="step-model model-badge opus">Opus</span>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step-node">
+        <div class="step-num">Step 3</div>
+        <div class="step-name">Implement</div>
+        <span class="step-model model-badge sonnet">Sonnet</span>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div>
+        <div class="parallel-label">Parallel</div>
+        <div class="parallel-group">
+          <div class="step-node" style="min-width:80px;">
+            <div class="step-num">4A</div>
+            <div class="step-name" style="font-size:11px;">Arch</div>
+            <span class="step-model model-badge opus" style="font-size:10px;">Opus</span>
+          </div>
+          <div class="step-node" style="min-width:80px;">
+            <div class="step-num">4B</div>
+            <div class="step-name" style="font-size:11px;">TS</div>
+            <span class="step-model model-badge opus" style="font-size:10px;">Opus</span>
+          </div>
+          <div class="step-node" style="min-width:80px;">
+            <div class="step-num">4C</div>
+            <div class="step-name" style="font-size:11px;">SCSS</div>
+            <span class="step-model model-badge opus" style="font-size:10px;">Opus</span>
+          </div>
+        </div>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step-node">
+        <div class="step-num">Step 5</div>
+        <div class="step-name">Fix</div>
+        <span class="step-model model-badge sonnet">Sonnet</span>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step-node">
+        <div class="step-num">Step 6</div>
+        <div class="step-name">Validate</div>
+        <span class="step-model model-badge haiku">Haiku</span>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step-node">
+        <div class="step-num">Step 7</div>
+        <div class="step-name" style="font-size:12px;">Fix Loop</div>
+        <span class="step-model model-badge sonnet">Sonnet</span>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step-node">
+        <div class="step-num">Step 8</div>
+        <div class="step-name">Present</div>
+        <span class="step-model model-badge haiku">Haiku</span>
+      </div>
+    </div>
+    <p style="margin-top:20px;font-size:13px;color:var(--muted);text-align:center;max-width:700px;">
+      Conditional branching: preflight clear &rarr; skip consult. 0 must-fix &rarr; skip fix. All clean &rarr; skip fix loop. No SCSS &rarr; skip 4C.
+    </p>
+  </div>
+
+  <!-- Slide 6: Step details - Clarify + Plan -->
+  <div class="slide" data-slide="5">
+    <h2>Steps 1-2: Понимание и планирование</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1000px;width:100%;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <span class="model-badge sonnet">Sonnet</span>
+          <span style="font-weight:600;">Step 1: Clarify</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.7;">
+          Analyst исследует кодовую базу. Определяет затронутые файлы и домены. Формулирует вопросы. Предлагает критерии успеха.
+        </p>
+        <div class="features" style="margin-top:12px;">
+          <span class="feature-chip">context-pack.md</span>
+          <span class="feature-chip">questions.md</span>
+          <span class="feature-chip">forced questions</span>
+        </div>
+        <p style="font-size:12px;color:var(--accent2);margin-top:12px;">
+          Context Pack: снимок всех файлов в один markdown. Downstream читают его вместо десятков Read-вызовов. Лимит 80KB.
+        </p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <span class="model-badge opus">Opus</span>
+          <span style="font-weight:600;">Step 2: Plan</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.7;">
+          Architect создаёт самодостаточный blueprint. Разработчику НЕ нужно читать другие файлы проекта, чтобы понять, что делать.
+        </p>
+        <div class="features" style="margin-top:12px;">
+          <span class="feature-chip">Naming Map</span>
+          <span class="feature-chip">Import Map</span>
+          <span class="feature-chip">Ordered Tasks</span>
+          <span class="feature-chip">Success Criteria</span>
+        </div>
+        <p style="font-size:12px;color:var(--accent2);margin-top:12px;">
+          Одно имя &mdash; один концепт на всех слоях: GraphQL operation &rarr; type &rarr; hook &rarr; directory &rarr; component &rarr; CSS class.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 7: Preflight + Consult -->
+  <div class="slide" data-slide="6">
+    <h2>Steps 2.5 + 3.5: Консультации</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1000px;width:100%;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <span class="tag accent" style="margin:0;">Pre-flight</span>
+          <span style="font-size:13px;color:var(--muted);">Step 2.5</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:12px;">
+          Sonnet-аналитик проверяет план на выполнимость ДО написания кода. Файл существует? Тип совпадает? Зависимость доступна?
+        </p>
+        <div style="font-family:monospace;font-size:12px;color:var(--muted);padding:12px;background:rgba(0,0,0,0.2);border-radius:8px;line-height:1.8;">
+          <span style="color:var(--haiku);">STATUS: clear</span> &rarr; Step 3<br>
+          <span style="color:var(--red);">STATUS: blocked</span> &rarr; Opus Consult<br>
+          <span style="color:var(--yellow);">PLAN_BROKEN</span> &rarr; Re-plan (max 1x)
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <span class="tag opus" style="margin:0;">Mid-flight</span>
+          <span style="font-size:13px;color:var(--muted);">Step 3.5</span>
+        </div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:12px;">
+          Developer обнаруживает блокер во время реализации. Пишет consult-request и ОСТАНАВЛИВАЕТСЯ. Opus отвечает, Developer продолжает.
+        </p>
+        <div style="font-family:monospace;font-size:12px;color:var(--muted);padding:12px;background:rgba(0,0,0,0.2);border-radius:8px;line-height:1.8;">
+          <span style="color:var(--opus);">5 триггеров:</span> missing_file,<br>
+          missing_symbol, type_mismatch,<br>
+          missing_dependency, api_mismatch<br>
+          <span style="color:var(--yellow);">Hard cap: 1 раз за сессию</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 8: Review + Fix -->
+  <div class="slide" data-slide="7">
+    <h2>Steps 4-7: Ревью, фикс, валидация</h2>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:1100px;width:100%;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;">
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <span class="model-badge opus">3x Opus</span>
+        </div>
+        <h3 style="font-size:14px;">Review</h3>
+        <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px;">
+          3 ревьюера параллельно: Architecture boundaries, TypeScript/Naming, SCSS. Shared diff.txt &mdash; 1 вызов git вместо 3.
+        </p>
+        <p style="font-size:11px;color:var(--accent2);margin-top:8px;">Severity: must / imho / note</p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;">
+        <span class="model-badge sonnet">Sonnet</span>
+        <h3 style="font-size:14px;margin-top:12px;">Fix</h3>
+        <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px;">
+          Хирургические исправления только must-fix. Ничего больше. Если 0 must-fix &mdash; шаг пропускается.
+        </p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;">
+        <span class="model-badge haiku">Haiku</span>
+        <h3 style="font-size:14px;margin-top:12px;">Validate</h3>
+        <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px;">
+          yarn typescript + lint:ts + lint:scss. Baseline diff: показывает только NEW ошибки, не legacy. Cascade detection.
+        </p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;">
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <span class="model-badge sonnet">Sonnet</span>
+          <span class="model-badge opus">Opus</span>
+        </div>
+        <h3 style="font-size:14px;">Fix Loop</h3>
+        <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px;">
+          Max 3 итерации Sonnet. Если застрял &mdash; Opus-эскалация (Step 7B): диагноз + revised approach.
+        </p>
+        <p style="font-size:11px;color:var(--yellow);margin-top:8px;">Circuit breaker: 3 loops + 1 escalation</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 9: Orchestration patterns -->
+  <div class="slide" data-slide="8">
+    <h2>Паттерны оркестрации</h2>
+    <div class="patterns-grid">
+      <div class="pattern-card">
+        <h3>Sequential</h3>
+        <p>Основной поток. Каждый шаг читает артефакты предыдущего.</p>
+        <div class="visual">1 &rarr; 2 &rarr; 2.5 &rarr; 3 &rarr; ... &rarr; 8</div>
+      </div>
+      <div class="pattern-card">
+        <h3>Parallel Fan-out</h3>
+        <p>3 ревьюера одновременно. Независимы, пишут в разные файлы.</p>
+        <div class="visual">
+          &nbsp;&nbsp;&nbsp;&#9484; 4A: Arch<br>
+          3 &rarr;&#9500; 4B: TS&nbsp;&nbsp;&nbsp;&nbsp; &rarr; 5<br>
+          &nbsp;&nbsp;&nbsp;&#9492; 4C: SCSS
+        </div>
+      </div>
+      <div class="pattern-card">
+        <h3>Conditional</h3>
+        <p>Маршрутизация по содержимому файлов. STATUS, PLAN_STATUS, must-fix count.</p>
+        <div class="visual">
+          clear &rarr; skip consult<br>
+          0 must &rarr; skip fix<br>
+          no scss &rarr; skip 4C
+        </div>
+      </div>
+      <div class="pattern-card">
+        <h3>Mid-flight Escalation</h3>
+        <p>Developer останавливается, Opus консультирует, Developer продолжает.</p>
+        <div class="visual">
+          3 &rarr; STOP &rarr; Opus &rarr; 3'
+        </div>
+      </div>
+      <div class="pattern-card">
+        <h3>Loop + Circuit Breaker</h3>
+        <p>Fix &rarr; Validate цикл, max 3x. Затем эскалация к Opus.</p>
+        <div class="visual">
+          6&#8596;7 &#8596; 6&#8596;7 &#8596; 6&#8596;7 &rarr; 7B
+        </div>
+      </div>
+      <div class="pattern-card">
+        <h3>File-based Routing</h3>
+        <p>Вся маршрутизация &mdash; по наличию и содержимому файлов. grep STATUS, count must-fix, check file exists.</p>
+        <div class="visual">
+          if blockers.md<br>
+          &nbsp;&nbsp;STATUS: blocked<br>
+          &rarr; launch consult
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 10: File protocol -->
+  <div class="slide" data-slide="9">
+    <h2>Файловый протокол</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;max-width:1000px;width:100%;align-items:start;">
+      <div class="file-tree">
+        <span class="dir">sessions/dev-20260414-175648/</span><br>
+        &nbsp;&nbsp;<span class="file">spec.md</span> <span class="step-tag">&larr; Step 1</span><br>
+        &nbsp;&nbsp;<span class="file">questions.md</span> <span class="step-tag">&larr; Step 1</span><br>
+        &nbsp;&nbsp;<span class="file">context-pack.md</span> <span class="step-tag">&larr; Step 1</span><br>
+        &nbsp;&nbsp;<span class="file">user-answers.md</span> <span class="step-tag">&larr; user</span><br>
+        &nbsp;&nbsp;<span class="file">plan.md</span> <span class="step-tag">&larr; Step 2</span><br>
+        &nbsp;&nbsp;<span class="file">preflight-blockers.md</span> <span class="step-tag">&larr; Step 2.5</span><br>
+        &nbsp;&nbsp;<span class="file">context-pack.delta.md</span> <span class="step-tag">&larr; Step 3+</span><br>
+        &nbsp;&nbsp;<span class="file">diff.txt</span> <span class="step-tag">&larr; dispatcher</span><br>
+        &nbsp;&nbsp;<span class="file">review-arch.md</span> <span class="step-tag">&larr; Step 4A</span><br>
+        &nbsp;&nbsp;<span class="file">review-ts.md</span> <span class="step-tag">&larr; Step 4B</span><br>
+        &nbsp;&nbsp;<span class="file">validate-log.md</span> <span class="step-tag">&larr; Step 6</span><br>
+        &nbsp;&nbsp;<span class="file">summary.md</span> <span class="step-tag">&larr; Step 8</span>
+      </div>
+      <div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+          <h3 style="font-size:14px;color:var(--accent2);margin-bottom:10px;">Почему файлы?</h3>
+          <p style="font-size:13px;color:var(--muted);line-height:1.7;">
+            <strong style="color:var(--text);">Debuggable</strong> &mdash; открыл папку сессии, видишь весь ход работы<br><br>
+            <strong style="color:var(--text);">Reproducible</strong> &mdash; перезапусти шаг с теми же input-файлами<br><br>
+            <strong style="color:var(--text);">Isolated</strong> &mdash; нет contamination через shared memory<br><br>
+            <strong style="color:var(--text);">Cache-friendly</strong> &mdash; стабильный Reading Order = prompt cache hit
+          </p>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;">
+          <h3 style="font-size:14px;color:var(--accent2);margin-bottom:10px;">Context Pack + Delta</h3>
+          <p style="font-size:13px;color:var(--muted);line-height:1.7;">
+            <strong style="color:var(--text);">Pack</strong> = snapshot &laquo;до&raquo; (Step 1)<br>
+            <strong style="color:var(--text);">Delta</strong> = patch &laquo;после&raquo; (Step 3, append 5/7)<br><br>
+            1 Read вместо 15. Все агенты читают одни файлы.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 11: Cost optimization -->
+  <div class="slide" data-slide="10">
+    <h2>Model Routing: стоимость и качество</h2>
+    <table class="cost-table">
+      <thead>
+        <tr>
+          <th>Роль</th>
+          <th>Модель</th>
+          <th>Cost</th>
+          <th>Execution Mode</th>
+          <th>Обоснование</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Analyst</td>
+          <td><span class="model-badge sonnet">Sonnet</span></td>
+          <td>$$</td>
+          <td>MEDIUM</td>
+          <td style="color:var(--muted);">Широкий поиск, не нужен deep reasoning</td>
+        </tr>
+        <tr>
+          <td>Architect</td>
+          <td><span class="model-badge opus">Opus</span></td>
+          <td>$$$$</td>
+          <td>HIGH</td>
+          <td style="color:var(--muted);">Решения с последствиями, trade-offs</td>
+        </tr>
+        <tr>
+          <td>Developer</td>
+          <td><span class="model-badge sonnet">Sonnet</span></td>
+          <td>$$</td>
+          <td>LOW</td>
+          <td style="color:var(--muted);">Механическое исполнение по плану</td>
+        </tr>
+        <tr>
+          <td>Validator</td>
+          <td><span class="model-badge haiku">Haiku</span></td>
+          <td>$</td>
+          <td>LOW</td>
+          <td style="color:var(--muted);">Запуск bash + парсинг output</td>
+        </tr>
+        <tr>
+          <td>Consultant</td>
+          <td><span class="model-badge opus">Opus</span></td>
+          <td>$$$$</td>
+          <td>HIGH</td>
+          <td style="color:var(--muted);">Conditional &mdash; не слабее планировщика</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top:24px;font-size:13px;color:var(--muted);text-align:center;max-width:600px;">
+      Весь пайплайн на Opus = ~10x дороже. Весь на Sonnet = больше итераций fix loop, парадоксально дороже.
+      <br>Reading Order + prompt cache TTL 5 мин = cache hit на параллельных ревьюерах.
+    </p>
+  </div>
+
+  <!-- Slide 12: Why not BMAD / Kiro / frameworks -->
+  <div class="slide" data-slide="11">
+    <h2>Почему не BMAD, Kiro, LangChain?</h2>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1100px;width:100%;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;">
+        <h3 style="font-size:14px;color:var(--red);margin-bottom:12px;">BMAD Method</h3>
+        <p style="font-size:12px;color:var(--muted);line-height:1.7;">
+          Агенты &laquo;общаются&raquo; друг с другом через длинные текстовые сообщения &mdash; имитация совещания. Выглядит красиво, но каждое &laquo;обсуждение&raquo; &mdash; это сотни токенов на форматирование, вежливость и пересказ контекста, который агент уже имеет.
+        </p>
+        <p style="font-size:11px;color:var(--yellow);margin-top:10px;">
+          Визуальная имитация коммуникации &ne; полезная работа. Токены тратятся на церемонию, а не на результат.
+        </p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;">
+        <h3 style="font-size:14px;color:var(--red);margin-bottom:12px;">Kiro / Spec-driven</h3>
+        <p style="font-size:12px;color:var(--muted);line-height:1.7;">
+          Генерирует спецификации и task-файлы, но нет разделения моделей по ролям &mdash; всё на одной модели. Нет параллельного ревью, нет mid-flight консультаций, нет circuit breaker при зацикливании.
+        </p>
+        <p style="font-size:11px;color:var(--yellow);margin-top:10px;">
+          Spec-first подход правильный, но без когнитивного разделения &mdash; это просто structured prompting.
+        </p>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;">
+        <h3 style="font-size:14px;color:var(--red);margin-bottom:12px;">LangChain / CrewAI</h3>
+        <p style="font-size:12px;color:var(--muted);line-height:1.7;">
+          Внешняя инфраструктура: Python runtime, pip-зависимости, custom server. Агенты обмениваются через shared memory &mdash; невозможно открыть файл и посмотреть, что произошло. Отладка через trace viewer.
+        </p>
+        <p style="font-size:11px;color:var(--yellow);margin-top:10px;">
+          Фреймворк решает задачу оркестрации, но создаёт задачу инфраструктуры. Наш подход: 0 зависимостей.
+        </p>
+      </div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:20px;max-width:1100px;width:100%;">
+      <h3 style="font-size:14px;color:var(--accent2);margin-bottom:12px;">Наш подход: файлы + Claude Code CLI</h3>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <p style="font-size:12px;color:var(--muted);line-height:1.7;">
+            <strong style="color:var(--text);">Нет имитации общения</strong> &mdash; агенты не &laquo;разговаривают&raquo;. Один пишет файл, другой читает. Ноль токенов на церемонию.
+          </p>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <p style="font-size:12px;color:var(--muted);line-height:1.7;">
+            <strong style="color:var(--text);">Debuggable</strong> &mdash; открыл <code style="color:var(--accent);">.claude/sessions/</code>, видишь каждый артефакт каждого шага. cat plan.md &mdash; и ты знаешь, что решил архитектор.
+          </p>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <p style="font-size:12px;color:var(--muted);line-height:1.7;">
+            <strong style="color:var(--text);">Zero setup</strong> &mdash; git clone, и пайплайн уже в репозитории. Новый разработчик запускает <code style="color:var(--accent);">/dev &lt;задача&gt;</code> и получает тот же flow.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 13: Summary -->
+  <div class="slide" data-slide="12">
+    <h2>Итоги</h2>
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="num">5</div>
+        <div class="label">когнитивных ролей</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">3</div>
+        <div class="label">модели (Opus / Sonnet / Haiku)</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">12+</div>
+        <div class="label">step-файлов в пайплайне</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">0</div>
+        <div class="label">внешних зависимостей</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">5</div>
+        <div class="label">паттернов оркестрации</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">~3-5x</div>
+        <div class="label">экономия vs &laquo;всё на Opus&raquo;</div>
+      </div>
+    </div>
+    <div style="margin-top:32px;text-align:center;">
+      <p style="font-size:16px;color:var(--accent);font-weight:600;margin-bottom:8px;">Файлы + Claude Code CLI + Git</p>
+      <p style="font-size:14px;color:var(--muted);">Мультиагентная оркестрация без единой строчки инфраструктурного кода</p>
+    </div>
+  </div>
+
+</div>
+
+<div class="slide-counter" id="counter">1 / 13</div>
+
+<div class="nav">
+  <button onclick="prev()" id="btnPrev">&#8592;</button>
+  <button onclick="next()" id="btnNext">&#8594;</button>
+</div>
+
+<script>
+  let current = 0;
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  const progress = document.getElementById('progress');
+  const counter = document.getElementById('counter');
+
+  function go(n) {
+    if (n < 0 || n >= total) return;
+    const prevSlide = slides[current];
+    prevSlide.classList.remove('active');
+    prevSlide.classList.add(n > current ? 'prev' : '');
+
+    current = n;
+    slides.forEach((s, i) => {
+      s.classList.remove('active', 'prev');
+      if (i === current) s.classList.add('active');
+    });
+
+    progress.style.width = ((current + 1) / total * 100) + '%';
+    counter.textContent = (current + 1) + ' / ' + total;
+  }
+
+  function next() { go(current + 1); }
+  function prev() { go(current - 1); }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    if (e.key === 'Home') { e.preventDefault(); go(0); }
+    if (e.key === 'End') { e.preventDefault(); go(total - 1); }
+  });
+
+  let touchStartX = 0;
+  document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 50) dx > 0 ? prev() : next();
+  });
+
+  progress.style.width = (1 / total * 100) + '%';
+</script>
+
+</body>
+</html>
